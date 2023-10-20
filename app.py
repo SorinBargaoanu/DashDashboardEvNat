@@ -1,65 +1,13 @@
 # Importare modulele necesare
 import pandas as pd
-import numpy as np
-from dash import dash, dcc, html, Input, Output, State
+from dash import dash, dcc, html, Input, Output, State, dash_table
 
 # Sursa datelor:
 # https://data.gov.ro/en/dataset?q=evaluare+nationala
 
-# Încărcarea datelor
-df_2014 = pd.read_csv("data/evnat_2014.csv", sep=",", encoding='latin')
-df_2015 = pd.read_csv("data/evnat_2015.csv", sep=",", encoding='latin')
-df_2016 = pd.read_csv("data/evnat_2016.csv", sep=",", encoding='latin')
-df_2017 = pd.read_csv("data/evnat_2017.csv", sep=",", encoding='latin')
-df_2019 = pd.read_csv("data/evnat_2019.csv", sep=",", encoding='latin')
-df_2020 = pd.read_csv("data/evnat_2020.csv", sep=",", encoding='latin')
-df_2022 = pd.read_csv("data/evnat_2022.csv", sep=",", encoding='latin')
-
-# Crearea unei liste de df-uri
-dfs = [df_2014, df_2015, df_2016, df_2017, df_2019, df_2020, df_2022]
-
-# Conversia tuturor numelor de coloane în litere mici și eliminarea spațiilor goale
-for df in dfs:
-    df.columns = df.columns.str.lower().str.strip()
-
-# Păstrarea doar a coloanelor dorite
-df_2014 = df_2014[['cod unic candidat', 'sex', 'mediu', 'nota romana', 'nota matematica', 'media en',
-                   'media v-viii', 'judet']]
-df_2015 = df_2015[['cod unic candidat', 'sex', 'mediu', 'nota finala romana', 'nota finala matematica', 'media']]
-df_2016 = df_2016[['cod unic candidat', 'sex', 'mediu', 'nota finala romana', 'nota finala matematica',
-                   'media', 'media v-viii']]
-df_2017 = df_2017[['cod unic candidat', 'sex', 'mediu', 'nota finala romana', 'nota finala matematica',
-                   'media', 'media v-viii']]
-df_2019 = df_2019[['cod unic candidat', 'sex', 'mediu', 'nota finala romana', 'nota finala matematica',
-                   'media', 'media v-viii']]
-df_2020 = df_2020[['cod unic candidat', 'sex', 'mediu', 'nota finala romana', 'nota finala matematica',
-                   'media', 'media v-viii']]
-df_2022 = df_2022[['cod unic candidat', 'sex', 'mediu', 'nota finala romana', 'nota finala matematica',
-                   'media', 'media v-viii', 'judet']]
-
-# Curățare coloană "media" de conținut tip string
-df_2015.loc[:, 'media'] = df_2015['media'].replace('Absent', np.nan).astype(float)
-
-# Redenumire coloane
-df_2014 = df_2014.rename(columns={'media en': 'media', 'nota romana': 'nota finala romana',
-                                  'nota matematica': 'nota finala matematica'})
-dfs = [df_2014, df_2015, df_2016, df_2017, df_2019, df_2020, df_2022]
-for df in dfs:
-    df.rename(columns={"sex": "genul elevului"}, inplace=True)
-    df.rename(columns={"media": "media finala"}, inplace=True)
-    df.rename(columns={"mediu": "urban/rural"}, inplace=True)
-
-# Adăugarea coloanei 'an' pentru fiecare df
-df_2014.loc[:, 'an'] = 2014
-df_2015.loc[:, 'an'] = 2015
-df_2016.loc[:, 'an'] = 2016
-df_2017.loc[:, 'an'] = 2017
-df_2019.loc[:, 'an'] = 2019
-df_2020.loc[:, 'an'] = 2020
-df_2022.loc[:, 'an'] = 2022
-
-# Combinarea tuturor df-urilor într-unul singur
-df_total = pd.concat([df_2014, df_2015, df_2016, df_2017, df_2019, df_2020, df_2022], ignore_index=True)
+# Importare fisier unit ce contine rezultatele la Evaluarea Nationala pentru anii 2014 - 2023
+# df_total = pd.read_pickle("data/evnat_2014_2023.pkl")
+df_total = pd.read_csv("data/evnat_2014_2023.csv", low_memory=False)
 
 
 # Definirea funcției pentru calcularea mediei în funcție de notă și grupare
@@ -73,6 +21,34 @@ def calculeaza_medie(df_calc, nota_coloana, grupare_coloana):
     return medie_df
 
 
+# Generate a continuous gray gradient based on the values in the table
+def get_continuous_gray_color(value):
+    # Adjust the range of the gradient
+    light_gray = 0.97  # close to 1 (which is white), but slightly gray
+    dark_gray = 0.5  # mid-gray
+
+    normalized = (value - min_value) / (max_value - min_value)
+    adjusted = light_gray - normalized * (light_gray - dark_gray)
+
+    gray_value = int(255 * adjusted)
+    return f"#{gray_value:02x}{gray_value:02x}{gray_value:02x}"
+
+
+# Clasificarea notelor în categorii
+bins = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]  # 11 este folosit pentru a include 10 în ultimul interval
+labels = ["2 - 2.99", "3 - 3.99", "4 - 4.99", "5 - 5.99", "6 - 6.99", "7 - 7.99", "8 - 8.99", "9 - 9.99", "10"]
+df_total['Grade Category'] = pd.cut(df_total['media finala'], bins=bins, labels=labels, right=False)
+
+# Grupare după an și categorie de notă pentru a obține numărul de elevi pentru fiecare an și categorie de notă
+grade_counts_by_year = df_total.groupby(['an', 'Grade Category']).size().unstack().fillna(0).astype(int)
+transposed_table = grade_counts_by_year.transpose()
+transposed_table["Total"] = transposed_table.sum(axis=1)
+percentage_table_corrected = (transposed_table.div(transposed_table.sum(axis=0), axis=1) * 100).round(2)
+percentage_table_corrected["Total"] = round(percentage_table_corrected.sum(axis=1), 2)
+
+min_value = transposed_table.drop("Total", axis=1).values.min()
+max_value = transposed_table.drop("Total", axis=1).values.max()
+
 # Crearea aplicației
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -85,8 +61,14 @@ app.layout = html.Div([
     html.Div([
         html.Div([
             # html.Img(src='/assets/images/logo_intuitext.png')
-            html.H1('Rezultate Evaluarea Națională 2014 - 2022', style={'margin-bottom': '0px', 'color': 'black'})
+            html.H1('Rezultate Evaluarea Națională 2014 - 2023',
+                    style={'margin-bottom': '0px', 'color': 'black'})
         ], id="title", className="create_container1"),
+        html.Div([
+            # html.Img(src='/assets/images/logo_intuitext.png')
+            html.H3('Evoluția mediei anuale (2014-2023)',
+                    style={'margin-bottom': '0px', 'color': 'rgb(30,144,255)'})
+        ], id="title", className="create_container1")
     ], id="header", className="flex-display", style={"margin": "50px"}),
     dcc.Dropdown(
         id='nota-selector',
@@ -110,7 +92,40 @@ app.layout = html.Div([
     ),
     html.Button('Calculeaza rezultatul', id='calculeaza-button', n_clicks=0,
                 style={'background-color': 'rgb(30,144,255)', 'color': 'white'}),
-    dcc.Graph(id='rezultat-grafic')
+    dcc.Graph(id='rezultat-grafic'),
+    html.Div([
+        html.Div([
+            # html.Img(src='/assets/images/logo_intuitext.png')
+            html.H3('Distribuția notelor elevilor pe ani (2014-2023)',
+                    style={'margin-bottom': '0px', 'color': 'rgb(30,144,255)'})
+        ], id="title", className="create_container1")
+    ], id="header", className="flex-display", style={"margin": "50px"}),
+
+    dcc.Dropdown(
+        id="display-mode",
+        options=[
+            {"label": "Numere", "value": "numbers"},
+            {"label": "Procente", "value": "percentages"}
+        ],
+        value="numbers",
+        clearable=False
+    ),
+    # Locație rezervată pentru tabelul dinamic
+    html.Div(id="dynamic-table"),
+    dcc.Graph(
+        id='line-chart',
+        figure={
+            'data': [
+                {'x': list(range(2014, 2024)), 'y': transposed_table.loc[grade],
+                 'mode': 'lines+markers', 'name': grade} for grade in labels
+            ],
+            'layout': {
+                'title': 'Evoluția notelor pe ani',
+                'xaxis': {'title': 'An'},
+                'yaxis': {'title': 'Număr de elevi'}
+            }
+        }
+    ),
 ])
 
 
@@ -130,7 +145,8 @@ def update_grafic(n_clicks, nota_coloana, grupare_coloane):
     fig = {
         'data': [],
         'layout': {
-            'title': f'Evoluția mediei "{nota_coloana}" în funcție de "{", ".join(grupare_coloane)}"',
+            'title': f'Evoluția mediei "{str(nota_coloana)}" '
+                     f'în funcție de "{", ".join([str(item) for item in grupare_coloane])}"',
             'xaxis': {'title': 'An'},
             'yaxis': {'title': f'Medie "{nota_coloana}"'}
         }
@@ -147,7 +163,7 @@ def update_grafic(n_clicks, nota_coloana, grupare_coloane):
                     'x': medie_df['an'],
                     'y': medie_df[nota_coloana],
                     'type': 'line',
-                    'name': f'{valoare_grupare1} din {valoare_grupare2}'
+                    'name': f'{str(valoare_grupare1)} din {str(valoare_grupare2)}'
                 })
     else:
         for grupare_coloana in grupare_coloane:
@@ -162,27 +178,55 @@ def update_grafic(n_clicks, nota_coloana, grupare_coloane):
                     'x': ani,
                     'y': valori_medii,
                     'type': 'line',
-                    'name': f'{categorie} ({grupare_coloana})'
+                    'name': f'{str(categorie)} ({str(grupare_coloana)})'
                 })
-
-    # # Adăugarea liniilor în grafic pentru fiecare categorie și grupare
-    # for grupare_coloana in grupare_coloane:
-    #     medie_df = calculeaza_medie(df_total, nota_coloana, grupare_coloana)
-    #     ani = sorted(df_total['an'].unique())
-    #     categorii = df_total[grupare_coloana].unique()
-    #
-    #     for categorie in categorii:
-    #         valori_medii = medie_df[medie_df[grupare_coloana] == categorie][nota_coloana]
-    #
-    #         fig['data'].append({
-    #             'x': ani,
-    #             'y': valori_medii,
-    #             'type': 'line',
-    #             'name': f'{categorie} ({grupare_coloana})'
-    #         })
-
-    # Returnarea graficului actualizat
     return fig
+
+
+@app.callback(
+    Output("dynamic-table", "children"),
+    [Input("display-mode", "value")]
+)
+def update_table(display_mode):
+    if display_mode == "numbers":
+        data = transposed_table.reset_index().to_dict("records")
+    else:
+        data = percentage_table_corrected.reset_index().to_dict("records")
+
+    table = dash_table.DataTable(
+        # Columns definition remains the same
+        columns=[{"name": str(i), "id": str(i)} for i in (["Grade Category"] + list(range(2014, 2024)) + ["Total"])],
+        data=data,
+
+        # Conditional Coloring
+        style_data_conditional=[
+            {
+                'if': {
+                    'column_id': str(col),
+                    'row_index': idx
+                },
+                'backgroundColor': get_continuous_gray_color(value),
+            }
+            for col in list(range(2014, 2024))
+            for idx, value in enumerate(transposed_table[col])
+        ],
+
+        # Horizontal Scroll
+        style_table={
+            'overflowX': 'scroll'
+        },
+
+        # Styling Header
+        style_header={
+            'backgroundColor': '#636EFA',
+            'fontWeight': 'bold',
+            'color': 'white'
+        },
+
+        # Sorting
+        sort_action="native"
+    )
+    return table
 
 
 # Pornirea serverului Dash

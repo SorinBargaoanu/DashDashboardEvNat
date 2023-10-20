@@ -31,3 +31,15 @@ După ce ai instalat dependențele, poți rula proiectul cu următoarea comandă
 
 
 Apoi, deschide un browser și accesează http://127.0.0.1:8050 pentru a vizualiza dashboard-ul.
+
+## Locatie exacta fisiere
+- rezultate 2014: https://data.gov.ro/en/dataset/evaluare-2014
+- rezultate 2015: https://data.gov.ro/en/dataset/rezultatele-la-evaluarea-nationala-2015
+- rezultate 2016: https://data.gov.ro/en/dataset/rezultatele-la-evaluarea-nationala-2016
+- rezultate 2017: https://data.gov.ro/en/dataset/rezultate-evaluare-nationala-2017
+- rezultate 2018: https://data.gov.ro/dataset/rezultate-evaluarea-nationala-2018
+- rezultate 2019: https://data.gov.ro/en/dataset/rezultate-evaluare-nationala-2019
+- rezultate 2020: https://data.gov.ro/dataset/rezultate-evaluarea-nationala-2020
+- rezultate 2021: https://data.gov.ro/dataset/rezultate-evaluarea-nationala-2021
+- rezultate 2022: https://data.gov.ro/en/dataset/rezultate-evaluare-nationala-2022
+- rezultate 2023: https://data.gov.ro/en/dataset/rezultatele-la-evaluarea-nationala-2023
