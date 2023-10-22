@@ -1,17 +1,26 @@
-# Importare modulele necesare
+# Importing the necessary modules
 import pandas as pd
 from dash import dash, dcc, html, Input, Output, State, dash_table
 
-# Sursa datelor:
+# Data source:
 # https://data.gov.ro/en/dataset?q=evaluare+nationala
 
-# Importare fisier unit ce contine rezultatele la Evaluarea Nationala pentru anii 2014 - 2023
-# df_total = pd.read_pickle("data/evnat_2014_2023.pkl")
+# Importing the file that contains the results of the National Assessment for the years 2014 - 2023
 df_total = pd.read_csv("data/evnat_2014_2023.csv", low_memory=False)
 
 
-# Definirea funcției pentru calcularea mediei în funcție de notă și grupare
 def calculeaza_medie(df_calc, nota_coloana, grupare_coloana):
+    """
+    Calculate the average grades based on a specific grouping criterion.
+
+    Parameters:
+    - df_calc: DataFrame containing the data.
+    - nota_coloana: Column in the DataFrame representing the grade for which the average will be calculated.
+    - grupare_coloana: Column used for grouping to compute the average.
+
+    Returns:
+    - DataFrame containing the average grades for each year and specified grouping.
+    """
     medie_df = df_calc.groupby(['an', grupare_coloana])[nota_coloana].mean().reset_index()
     ani = sorted(df_calc['an'].unique())
     categorii = df_calc[grupare_coloana].unique()
@@ -21,8 +30,18 @@ def calculeaza_medie(df_calc, nota_coloana, grupare_coloana):
     return medie_df
 
 
-# Generate a continuous gray gradient based on the values in the table
-def get_continuous_gray_color(value):
+def get_continuous_gray_color(value, min_value, max_value):
+    """
+    Generate a continuous gray gradient based on the provided values.
+
+    Parameters:
+    - value: The current value for which the color needs to be determined.
+    - min_value: The minimum value in the range.
+    - max_value: The maximum value in the range.
+
+    Returns:
+    - A string representing the hex color code corresponding to the value.
+    """
     # Adjust the range of the gradient
     light_gray = 0.97  # close to 1 (which is white), but slightly gray
     dark_gray = 0.5  # mid-gray
@@ -34,28 +53,63 @@ def get_continuous_gray_color(value):
     return f"#{gray_value:02x}{gray_value:02x}{gray_value:02x}"
 
 
-# Clasificarea notelor în categorii
-bins = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]  # 11 este folosit pentru a include 10 în ultimul interval
-labels = ["2 - 2.99", "3 - 3.99", "4 - 4.99", "5 - 5.99", "6 - 6.99", "7 - 7.99", "8 - 8.99", "9 - 9.99", "10"]
-df_total['Grade Category'] = pd.cut(df_total['media finala'], bins=bins, labels=labels, right=False)
+def prepare_data_for_selected_column(column_name):
+    """
+    Prepare the data for the selected grade column by categorizing it into predefined grade intervals.
 
-# Grupare după an și categorie de notă pentru a obține numărul de elevi pentru fiecare an și categorie de notă
-grade_counts_by_year = df_total.groupby(['an', 'Grade Category']).size().unstack().fillna(0).astype(int)
-transposed_table = grade_counts_by_year.transpose()
-transposed_table["Total"] = transposed_table.sum(axis=1)
-percentage_table_corrected = (transposed_table.div(transposed_table.sum(axis=0), axis=1) * 100).round(2)
-percentage_table_corrected["Total"] = round(percentage_table_corrected.sum(axis=1), 2)
+    Parameters:
+    - column_name: Name of the column in df_total which represents the grade of interest.
 
-min_value = transposed_table.drop("Total", axis=1).values.min()
-max_value = transposed_table.drop("Total", axis=1).values.max()
+    Returns:
+    - DataFrame with the count of students for each year and grade category.
+    """
+    df_total['Grade Category'] = pd.cut(df_total[column_name], bins=bins, labels=labels, right=False)
+    grade_counts_by_year = df_total.groupby(['an', 'Grade Category']).size().unstack().fillna(0).astype(int)
 
-# Crearea aplicației
+    return grade_counts_by_year
 
+
+def generate_line_chart_figure(data_records):
+    """
+    Generate the figure (data and layout) for a line chart visualization based on the provided data records.
+
+    Parameters:
+    - data_records: List of dictionaries representing the data to be plotted.
+
+    Returns:
+    - A dictionary containing the data and layout for the line chart.
+    """
+    data_df = pd.DataFrame(data_records).set_index("Grade Category")
+    return {
+        'data': [
+            {'x': list(range(2014, 2024)),
+             'y': data_df.loc[grade].values[:-1],  # exclude coloana "Total"
+             'mode': 'lines+markers',
+             'name': grade,
+             'text': [f"Categorie notă: {grade}<br>An: {x}<br>Număr de elevi: {y}"
+                      for x, y in zip(list(range(2014, 2024)), data_df.loc[grade])],
+             'hoverinfo': 'text'
+             } for grade in labels
+        ],
+        'layout': {
+            'title': 'Evoluția notelor pe ani',
+            'xaxis': {'title': 'An'},
+            'yaxis': {'title': 'Număr de elevi'}
+        }
+    }
+
+
+# Categorizing the grades
+bins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+labels = ["1 - 1.99", "2 - 2.99", "3 - 3.99", "4 - 4.99", "5 - 5.99", "6 - 6.99", "7 - 7.99", "8 - 8.99",
+          "9 - 9.99", "10"]
+
+# Creating the application
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
-# Definirea aspectului aplicației
+# Defining the appearance of the application
 app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     html.Div([
@@ -68,7 +122,7 @@ app.layout = html.Div([
             # html.Img(src='/assets/images/logo_intuitext.png')
             html.H3('Evoluția mediei anuale (2014-2023)',
                     style={'margin-bottom': '0px', 'color': 'rgb(30,144,255)'})
-        ], id="title", className="create_container1")
+        ], id="title2", className="create_container1")
     ], id="header", className="flex-display", style={"margin": "50px"}),
     dcc.Dropdown(
         id='nota-selector',
@@ -98,9 +152,19 @@ app.layout = html.Div([
             # html.Img(src='/assets/images/logo_intuitext.png')
             html.H3('Distribuția notelor elevilor pe ani (2014-2023)',
                     style={'margin-bottom': '0px', 'color': 'rgb(30,144,255)'})
-        ], id="title", className="create_container1")
-    ], id="header", className="flex-display", style={"margin": "50px"}),
-
+        ], id="title3", className="create_container1")
+    ], id="header2", className="flex-display", style={"margin": "50px"}),
+    dcc.Dropdown(
+        id='column-dropdown',
+        options=[
+            {'label': 'Media Finală', 'value': 'media finala'},
+            {'label': 'Media Română', 'value': 'nota finala romana'},
+            {'label': 'Media Matematică', 'value': 'nota finala matematica'},
+            {'label': 'Media V-VIII', 'value': 'media v-viii'}
+        ],
+        value='media finala',  # default value
+        clearable=False  # prevent the user from clearing the selection
+    ),
     dcc.Dropdown(
         id="display-mode",
         options=[
@@ -112,24 +176,11 @@ app.layout = html.Div([
     ),
     # Locație rezervată pentru tabelul dinamic
     html.Div(id="dynamic-table"),
-    dcc.Graph(
-        id='line-chart',
-        figure={
-            'data': [
-                {'x': list(range(2014, 2024)), 'y': transposed_table.loc[grade],
-                 'mode': 'lines+markers', 'name': grade} for grade in labels
-            ],
-            'layout': {
-                'title': 'Evoluția notelor pe ani',
-                'xaxis': {'title': 'An'},
-                'yaxis': {'title': 'Număr de elevi'}
-            }
-        }
-    ),
+    dcc.Graph(id='line-chart'),
 ])
 
 
-# Definirea funcției pentru actualizarea graficului în funcție de notă și grupare
+# Defining the function to update the chart based on the grade and grouping
 @app.callback(
     Output('rezultat-grafic', 'figure'),
     [Input('calculeaza-button', 'n_clicks')],
@@ -184,14 +235,24 @@ def update_grafic(n_clicks, nota_coloana, grupare_coloane):
 
 
 @app.callback(
-    Output("dynamic-table", "children"),
-    [Input("display-mode", "value")]
+    [Output('dynamic-table', 'children'),
+     Output('line-chart', 'figure')],
+    [Input('display-mode', 'value'),
+     Input('column-dropdown', 'value')]
 )
-def update_table(display_mode):
+def update_table_and_chart(display_mode, selected_column):
+    grade_counts_by_year = prepare_data_for_selected_column(selected_column)
+
+    transposed_table = grade_counts_by_year.transpose()
+    transposed_table["Total"] = transposed_table.sum(axis=1)
+
+    min_value = transposed_table.drop("Total", axis=1).values.min()
+    max_value = transposed_table.drop("Total", axis=1).values.max()
     if display_mode == "numbers":
         data = transposed_table.reset_index().to_dict("records")
     else:
-        data = percentage_table_corrected.reset_index().to_dict("records")
+        percentage_data = (transposed_table.div(transposed_table.sum(axis=0), axis=1) * 100).round(2)
+        data = percentage_data.reset_index().to_dict("records")
 
     table = dash_table.DataTable(
         # Columns definition remains the same
@@ -205,7 +266,7 @@ def update_table(display_mode):
                     'column_id': str(col),
                     'row_index': idx
                 },
-                'backgroundColor': get_continuous_gray_color(value),
+                'backgroundColor': get_continuous_gray_color(value, min_value, max_value),
             }
             for col in list(range(2014, 2024))
             for idx, value in enumerate(transposed_table[col])
@@ -226,9 +287,10 @@ def update_table(display_mode):
         # Sorting
         sort_action="native"
     )
-    return table
+    line_chart_figure = generate_line_chart_figure(data)
+    return table, line_chart_figure
 
 
-# Pornirea serverului Dash
+# Starting the Dash server
 if __name__ == '__main__':
     app.run_server(debug=True, use_reloader=False)
