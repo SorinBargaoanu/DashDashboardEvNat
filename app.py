@@ -98,7 +98,6 @@ def generate_line_chart_figure(data_records):
         }
     }
 
-
 # Categorizing the grades
 bins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 labels = ["1 - 1.99", "2 - 2.99", "3 - 3.99", "4 - 4.99", "5 - 5.99", "6 - 6.99", "7 - 7.99", "8 - 8.99",
