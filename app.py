@@ -30,9 +30,28 @@ def calculeaza_medie(df_calc, nota_coloana, grupare_coloana):
     return medie_df
 
 
-def get_continuous_gray_color(value, min_value, max_value):
+def is_dark_color(hex_color):
     """
-    Generate a continuous gray gradient based on the provided values.
+    Determine if a given hex color is dark or not.
+
+    Parameters:
+    - hex_color: A string representing the hex color code.
+
+    Returns:
+    - A boolean indicating if the color is dark (True) or not (False).
+    """
+    # Convert hex to RGB values
+    r = int(hex_color[1:3], 16)
+    g = int(hex_color[3:5], 16)
+    b = int(hex_color[5:7], 16)
+    # Calculate the brightness of the color
+    brightness = (r * 299 + g * 587 + b * 114) / 1000
+    return brightness < 128  # Return True if the color is dark
+
+
+def get_continuous_color_gradient(value, min_value, max_value):
+    """
+    Generate a continuous color gradient based on the provided values.
 
     Parameters:
     - value: The current value for which the color needs to be determined.
@@ -42,15 +61,9 @@ def get_continuous_gray_color(value, min_value, max_value):
     Returns:
     - A string representing the hex color code corresponding to the value.
     """
-    # Adjust the range of the gradient
-    light_gray = 0.97  # close to 1 (which is white), but slightly gray
-    dark_gray = 0.5  # mid-gray
-
     normalized = (value - min_value) / (max_value - min_value)
-    adjusted = light_gray - normalized * (light_gray - dark_gray)
-
-    gray_value = int(255 * adjusted)
-    return f"#{gray_value:02x}{gray_value:02x}{gray_value:02x}"
+    idx = int(normalized * (len(ylgnbu_colors) - 1))
+    return ylgnbu_colors[idx]
 
 
 def prepare_data_for_selected_column(column_name):
@@ -97,6 +110,12 @@ def generate_line_chart_figure(data_records):
             'yaxis': {'title': 'Număr de elevi'}
         }
     }
+
+
+# Color palette
+ylgnbu_colors = [
+    "#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58"
+]
 
 # Categorizing the grades
 bins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
@@ -156,9 +175,9 @@ app.layout = html.Div([
     dcc.Dropdown(
         id='column-dropdown',
         options=[
-            {'label': 'Media Finală', 'value': 'media finala'},
-            {'label': 'Media Română', 'value': 'nota finala romana'},
-            {'label': 'Media Matematică', 'value': 'nota finala matematica'},
+            {'label': 'Nota finală română', 'value': 'nota finala romana'},
+            {'label': 'Nota finală matematică', 'value': 'nota finala matematica'},
+            {'label': 'Media finală', 'value': 'media finala'},
             {'label': 'Media V-VIII', 'value': 'media v-viii'}
         ],
         value='media finala',  # default value
@@ -265,7 +284,9 @@ def update_table_and_chart(display_mode, selected_column):
                     'column_id': str(col),
                     'row_index': idx
                 },
-                'backgroundColor': get_continuous_gray_color(value, min_value, max_value),
+                'backgroundColor': get_continuous_color_gradient(value, min_value, max_value),
+                'color': 'white' if is_dark_color(get_continuous_color_gradient(value, min_value, max_value))
+                else 'black',
             }
             for col in list(range(2014, 2024))
             for idx, value in enumerate(transposed_table[col])
